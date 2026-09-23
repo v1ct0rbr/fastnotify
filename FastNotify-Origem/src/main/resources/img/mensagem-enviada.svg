@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Mensagem enviada">
+  <defs>
+    <linearGradient id="bg" x1="8" y1="4" x2="56" y2="60" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3B82F6"/>
+      <stop offset="1" stop-color="#1D4ED8"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="20" y1="14" x2="44" y2="50" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#DBEAFE" stop-opacity="0.95"/>
+    </linearGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-color="#0F172A" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#bg)"/>
+  <rect x="2.75" y="2.75" width="58.5" height="58.5" rx="15.25" fill="none" stroke="#FFFFFF" stroke-opacity="0.18" stroke-width="1.5"/>
+  <g filter="url(#soft)">
+    <path fill="url(#shine)" d="M13.5 31.2c-.55-1.35.1-2.9 1.5-3.45L49.8 14.7c1.45-.55 3.05.4 3.25 1.95.1.7-.15 1.4-.7 1.9L31.6 42.1l-7.2 8.9c-.7.85-2.05 1-2.95.3l-5.4-4.2c-.55-.45-.9-1.1-.95-1.8l-.7-13.1c0-.4.1-.8.35-1.1l1.4-1.6c.3-.35.7-.55 1.15-.6l8.1-1.05-14.85-6.65z"/>
+    <path fill="none" stroke="#1E40AF" stroke-opacity="0.35" stroke-width="1.2" stroke-linecap="round" d="M31.8 41.8 49.9 16.6"/>
+  </g>
+  <circle cx="48.5" cy="47.5" r="7.5" fill="#22C55E" stroke="#FFFFFF" stroke-width="2"/>
+  <path d="M45.2 47.6 47.6 50 52.1 45.2" fill="none" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
