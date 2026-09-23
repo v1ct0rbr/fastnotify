@@ -111,14 +111,14 @@ public class NotificationWindow {
         divider.setMaxHeight(1);
         divider.setStyle("-fx-background-color: #E2E8F0;");
 
-        VBox bodyBox = new VBox(12);
+        VBox bodyBox = new VBox(14);
         if (msg.getTitle() != null && !msg.getTitle().isBlank()) {
             Label title = new Label(msg.getTitle());
             title.setWrapText(true);
             title.setMaxWidth(WIDTH - 72);
             title.setTextFill(Color.web("#0F172A"));
-            title.setFont(Font.font(Font.getDefault().getFamily(), FontWeight.EXTRA_BOLD, 28));
-            title.setStyle("-fx-line-spacing: 3px;");
+            title.setFont(Font.font(Font.getDefault().getFamily(), FontWeight.BOLD, 22));
+            title.setStyle("-fx-line-spacing: 2px;");
             bodyBox.getChildren().add(title);
         }
 
@@ -126,9 +126,9 @@ public class NotificationWindow {
             Label body = new Label(msg.getBody());
             body.setWrapText(true);
             body.setMaxWidth(WIDTH - 72);
-            body.setTextFill(Color.web("#334155"));
-            body.setFont(Font.font(Font.getDefault().getFamily(), FontWeight.NORMAL, 19));
-            body.setStyle("-fx-line-spacing: 4px;");
+            body.setTextFill(Color.web("#0F172A"));
+            body.setFont(Font.font(Font.getDefault().getFamily(), FontWeight.SEMI_BOLD, 22));
+            body.setStyle("-fx-line-spacing: 5px;");
             bodyBox.getChildren().add(body);
         }
         if (bodyBox.getChildren().isEmpty()) {
@@ -138,10 +138,33 @@ public class NotificationWindow {
             bodyBox.getChildren().add(empty);
         }
 
-        Label hint = new Label("Clique em qualquer lugar para fechar");
+        Label hint = new Label("Clique para fechar");
         hint.setTextFill(Color.web("#94A3B8"));
-        hint.setFont(Font.font(Font.getDefault().getFamily(), FontWeight.MEDIUM, 13));
+        hint.setFont(Font.font(Font.getDefault().getFamily(), FontWeight.MEDIUM, 12));
         HBox.setHgrow(hint, Priority.ALWAYS);
+
+        Label senderLabel = new Label();
+        String sender = msg.getSenderFullName() == null ? "" : msg.getSenderFullName().trim();
+        String domain = msg.getSenderDomain() == null ? "" : msg.getSenderDomain().trim();
+        String who;
+        if (!sender.isEmpty()) {
+            who = sender;
+        } else if (!domain.isEmpty()) {
+            who = domain;
+        } else {
+            who = System.getProperty("user.name", "");
+        }
+        boolean hasSender = who != null && !who.isBlank();
+        if (hasSender) {
+            senderLabel.setText("De: " + who);
+            senderLabel.setTextFill(Color.web("#334155"));
+            senderLabel.setFont(Font.font(Font.getDefault().getFamily(), FontWeight.SEMI_BOLD, 15));
+            senderLabel.setWrapText(true);
+            senderLabel.setMaxWidth(WIDTH - 40);
+        } else {
+            senderLabel.setManaged(false);
+            senderLabel.setVisible(false);
+        }
 
         Label closeBtn = new Label("✕");
         closeBtn.setTextFill(Color.web("#64748B"));
@@ -158,9 +181,16 @@ public class NotificationWindow {
                 + " -fx-control-inner-background: #E2E8F0;");
         wireProgress(bar);
 
-        HBox footer = new HBox(12, hint, bar, closeBtn);
+        HBox controls = new HBox(12, hint, bar, closeBtn);
+        controls.setAlignment(Pos.CENTER_LEFT);
+
+        VBox footer = new VBox(8);
+        if (hasSender) {
+            footer.getChildren().add(senderLabel);
+        }
+        footer.getChildren().add(controls);
         footer.setAlignment(Pos.CENTER_LEFT);
-        footer.setPadding(new Insets(14, 20, 16, 20));
+        footer.setPadding(new Insets(hasSender ? 10 : 14, 20, 16, 20));
         footer.setStyle("-fx-background-color: #F8FAFC;"
                 + " -fx-background-radius: 0 0 16 16;");
 
@@ -173,7 +203,10 @@ public class NotificationWindow {
         content.setPrefWidth(WIDTH);
         content.setMaxWidth(WIDTH);
         content.setSpacing(0);
-        VBox.setMargin(bodyBox, new Insets(20, 24, 8, 24));
+        VBox.setMargin(bodyBox, new Insets(22, 24, 14, 24));
+        bodyBox.setStyle("-fx-background-color: #F1F5F9;"
+                + " -fx-background-radius: 10;"
+                + " -fx-padding: 14 16 14 16;");
         content.setStyle(
                 " -fx-background-color: #FFFFFF;"
                         + " -fx-background-radius: 16;"

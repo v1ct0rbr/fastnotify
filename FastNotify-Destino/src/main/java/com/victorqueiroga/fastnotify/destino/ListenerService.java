@@ -19,6 +19,7 @@ public class ListenerService {
 
     private final Supplier<Integer> portSupplier;
     private final Supplier<String> tokenSupplier;
+    private final Supplier<String> pskSupplier;
     private final Supplier<Boolean> soundEnabledSupplier;
     private final BiConsumer<NotificationMessage, String> onMessage;
     private final LogService logService;
@@ -29,11 +30,13 @@ public class ListenerService {
 
     public ListenerService(Supplier<Integer> portSupplier,
                            Supplier<String> tokenSupplier,
+                           Supplier<String> pskSupplier,
                            Supplier<Boolean> soundEnabledSupplier,
                            BiConsumer<NotificationMessage, String> onMessage,
                            LogService logService) {
         this.portSupplier = portSupplier;
         this.tokenSupplier = tokenSupplier;
+        this.pskSupplier = pskSupplier;
         this.soundEnabledSupplier = soundEnabledSupplier;
         this.onMessage = onMessage;
         this.logService = logService;
@@ -78,7 +81,7 @@ public class ListenerService {
                     String ip = clientIp(socket);
                     socket.setSoTimeout(READ_TIMEOUT_MS);
                     DataInputStream in = new DataInputStream(socket.getInputStream());
-                    NotificationMessage msg = Protocol.read(in);
+                    NotificationMessage msg = Protocol.read(in, pskSupplier.get());
                     handle(socket, ip, msg);
                 } catch (SocketTimeoutException ignored) {
                 } catch (IOException e) {
@@ -96,12 +99,14 @@ public class ListenerService {
     private void handle(Socket socket, String ip, NotificationMessage msg) throws IOException {
         String expected = tokenSupplier.get() == null ? "" : tokenSupplier.get();
         String actual = msg.getToken() == null ? "" : msg.getToken();
+        String psk = pskSupplier.get();
         boolean tokenOk = tokenMatches(expected, actual);
 
         if (!tokenOk && blockManager.isBlocked(ip)) {
             if (msg.isTest()) {
                 String reason = blockManager.blockReason(ip);
-                Protocol.writeAck(new DataOutputStream(socket.getOutputStream()), false, reason);
+                Protocol.writeAck(new DataOutputStream(socket.getOutputStream()),
+                        false, reason, psk);
             }
             return;
         }
@@ -117,7 +122,8 @@ public class ListenerService {
             }
 
             if (msg.isTest()) {
-                Protocol.writeAck(new DataOutputStream(socket.getOutputStream()), true, "OK");
+                Protocol.writeAck(new DataOutputStream(socket.getOutputStream()),
+                        true, "OK", psk);
                 record(LogType.TEST_OK, ip, "Teste de conexão OK (token válido)", null);
                 return;
             }
@@ -136,14 +142,14 @@ public class ListenerService {
             DataOutputStream out = new DataOutputStream(socket.getOutputStream());
             if (blockedSeconds > 0) {
                 String detail = "Token inválido — IP bloqueado por " + blockedSeconds + "s";
-                Protocol.writeAck(out, false, detail);
+                Protocol.writeAck(out, false, detail, psk);
                 record(LogType.TEST_FAIL, ip, "Teste FALHOU | " + detail
                         + " (após " + IpBlockManager.ATTEMPTS_THRESHOLD + " tentativas)", null);
                 record(LogType.BLOCK, ip, "BLOQUEIO " + blockedSeconds + "s ativado", null);
             } else {
                 String detail = "Token inválido (" + attempts + "/"
                         + IpBlockManager.ATTEMPTS_THRESHOLD + ")";
-                Protocol.writeAck(out, false, detail);
+                Protocol.writeAck(out, false, detail, psk);
                 record(LogType.TEST_FAIL, ip, "Teste FALHOU | " + detail, null);
             }
             return;

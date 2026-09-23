@@ -1,4 +1,11 @@
 
 logs
+.vscode/
 FastNotify-Destino/target
 FastNotify-Origem/target
+
+# Runtime config (não versionar; manter apenas *.example.properties)
+config/*.properties
+!config/*.example.properties
+**/src/main/resources/config/*.properties
+!**/src/main/resources/config/*.example.properties

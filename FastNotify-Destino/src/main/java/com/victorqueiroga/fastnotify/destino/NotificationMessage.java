@@ -8,6 +8,8 @@ public class NotificationMessage {
     private String title;
     private String body;
     private boolean test;
+    private String senderFullName;
+    private String senderDomain;
 
     public NotificationMessage() {
         this.type = MsgType.NOTIFICATION;
@@ -15,6 +17,8 @@ public class NotificationMessage {
         this.screenIndex = 0;
         this.title = "";
         this.body = "";
+        this.senderFullName = "";
+        this.senderDomain = "";
     }
 
     public String getToken() {
@@ -71,5 +75,21 @@ public class NotificationMessage {
 
     public void setTest(boolean test) {
         this.test = test;
+    }
+
+    public String getSenderFullName() {
+        return senderFullName;
+    }
+
+    public void setSenderFullName(String senderFullName) {
+        this.senderFullName = senderFullName == null ? "" : senderFullName;
+    }
+
+    public String getSenderDomain() {
+        return senderDomain;
+    }
+
+    public void setSenderDomain(String senderDomain) {
+        this.senderDomain = senderDomain == null ? "" : senderDomain;
     }
 }

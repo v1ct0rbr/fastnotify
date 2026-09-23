@@ -26,15 +26,21 @@ public class SenderView extends BorderPane {
 
     private final MessageStore messageStore;
     private final DestinosStore destinosStore;
+    private final ConfigStore config;
+    private final LogService logService;
     private final ListView<ConfigStore.FixedMessage> fixedList = new ListView<>();
     private final ListView<DestinosStore.Destino> destList = new ListView<>();
     private final TextArea logArea = new TextArea();
     private final List<ConfigStore.FixedMessage> fixedMessages;
     private final List<DestinosStore.Destino> destinos;
+    private final Label registerStatus = new Label("Cadastro: —");
 
-    public SenderView(MessageStore messageStore, DestinosStore destinosStore) {
+    public SenderView(MessageStore messageStore, DestinosStore destinosStore,
+                      ConfigStore config, LogService logService) {
         this.messageStore = messageStore;
         this.destinosStore = destinosStore;
+        this.config = config;
+        this.logService = logService;
         this.fixedMessages = new ArrayList<>(messageStore.load());
         this.destinos = new ArrayList<>(destinosStore.load());
 
@@ -81,11 +87,19 @@ public class SenderView extends BorderPane {
         info.setWrapText(true);
         HBox.setHgrow(info, Priority.ALWAYS);
 
+        registerStatus.setStyle(
+                "-fx-text-fill: #2563EB; -fx-font-size: 12px; -fx-font-weight: bold;");
+
+        Button firewall = new Button("Firewall");
+        firewall.setTooltip(new javafx.scene.control.Tooltip(
+                "Consulta se a porta de cadastro tem regra de entrada no Windows"));
+        firewall.setOnAction(e -> checkFirewall());
+
         Button bell = new Button("🔔 Campainha");
         bell.setStyle("-fx-font-weight: bold; -fx-background-color: #F59E0B; -fx-text-fill: white;");
         bell.setOnAction(e -> sendCampainha());
 
-        HBox bar = new HBox(8, info, bell);
+        HBox bar = new HBox(8, info, registerStatus, firewall, bell);
         bar.setAlignment(Pos.CENTER_LEFT);
         bar.setPadding(new Insets(8));
         return bar;
@@ -156,7 +170,7 @@ public class SenderView extends BorderPane {
 
         add.setOnAction(e -> {
             DestinoDialog dialog = new DestinoDialog(
-                    getScene() == null ? null : getScene().getWindow(), null);
+                    getScene() == null ? null : getScene().getWindow(), null, config);
             dialog.showAndWait();
             if (dialog.isConfirmed()) {
                 destinos.add(dialog.toDestino());
@@ -169,7 +183,7 @@ public class SenderView extends BorderPane {
                 return;
             }
             DestinoDialog dialog = new DestinoDialog(
-                    getScene().getWindow(), destinos.get(idx));
+                    getScene().getWindow(), destinos.get(idx), config);
             dialog.showAndWait();
             if (dialog.isConfirmed()) {
                 destinos.set(idx, dialog.toDestino());
@@ -303,21 +317,30 @@ public class SenderView extends BorderPane {
         msg.setBody(body);
         msg.setDurationMs(durationMs);
         msg.setScreenIndex(screen);
+        msg.setSenderFullName(UserNames.realFullName());
+        msg.setSenderDomain(UserNames.domainOrGroup());
 
-        String host = d.host();
+        String host = d.connectHost();
         int port = d.effectivePortInt();
         String label = d.alias() == null || d.alias().isBlank() ? host : d.alias();
+        String ip = d.effectiveHostIp();
+        String psk = config.effectivePsk(d.effectiveToken());
 
         Thread t = new Thread(() -> {
             try {
-                NotificationClient.send(host, port, msg);
-                javafx.application.Platform.runLater(() ->
-                        log("Enviado [" + type.label() + "] → " + label
-                                + " (" + host + ":" + port + ")"
-                                + " | tela " + screen + " | " + durationMs + "ms"));
+                NotificationClient.send(host, port, msg, psk);
+                String detail = "Enviado [" + type.label() + "] → " + label
+                        + " (" + host + ":" + port + ")"
+                        + (ip.isEmpty() || ip.equalsIgnoreCase(host) ? ""
+                        : " ip=" + ip)
+                        + " | tela " + screen + " | " + durationMs + "ms"
+                        + (psk.isEmpty() ? "" : " | cifrado")
+                        + (d.effectiveDepartment().isEmpty()
+                        ? "" : " | dept=" + d.effectiveDepartment());
+                javafx.application.Platform.runLater(() -> logAs(LogType.SEND, host, detail));
             } catch (Exception ex) {
-                javafx.application.Platform.runLater(() ->
-                        log("ERRO " + label + " (" + host + ":" + port + ") — " + ex.getMessage()));
+                javafx.application.Platform.runLater(() -> logAs(LogType.ERROR, host,
+                        "ERRO " + label + " (" + host + ":" + port + ") — " + ex.getMessage()));
             }
         }, "fastnotify-send");
         t.setDaemon(true);
@@ -336,24 +359,30 @@ public class SenderView extends BorderPane {
     }
 
     private void testDestino(DestinosStore.Destino d) {
-        String host = d.host();
+        String host = d.connectHost();
         int port = d.effectivePortInt();
         String token = d.effectiveToken();
         String label = d.alias() == null || d.alias().isBlank() ? host : d.alias();
-        log("Testando " + label + " (" + host + ":" + port + ") ...");
+        String ip = d.effectiveHostIp();
+        String where = ip.isEmpty() || ip.equalsIgnoreCase(host)
+                ? host + ":" + port
+                : host + ":" + port + " ip=" + ip;
+        log("Testando " + label + " (" + where + ") ...");
         Thread t = new Thread(() -> {
             try {
-                Protocol.Ack ack = NotificationClient.test(host, port, token);
+                Protocol.Ack ack = NotificationClient.test(host, port, token,
+                        config.effectivePsk(token));
                 javafx.application.Platform.runLater(() -> {
                     if (ack.ok()) {
-                        log("TESTE OK — " + label + " — " + ack.detail());
+                        logAs(LogType.TEST_OK, host, "TESTE OK — " + label + " — " + ack.detail());
                     } else {
-                        log("TESTE FALHOU — " + label + " — " + ack.detail());
+                        logAs(LogType.TEST_FAIL, host,
+                                "TESTE FALHOU — " + label + " — " + ack.detail());
                     }
                 });
             } catch (Exception ex) {
-                javafx.application.Platform.runLater(() ->
-                        log("TESTE FALHOU — " + label + " — " + ex.getMessage()));
+                javafx.application.Platform.runLater(() -> logAs(LogType.TEST_FAIL, host,
+                        "TESTE FALHOU — " + label + " — " + ex.getMessage()));
             }
         }, "fastnotify-test");
         t.setDaemon(true);
@@ -383,6 +412,54 @@ public class SenderView extends BorderPane {
     public void log(String message) {
         logArea.appendText(LocalTime.now().format(TIME) + "  " + message + "\n");
         logArea.positionCaret(logArea.getLength());
+    }
+
+    public void logAs(LogType type, String ip, String message) {
+        log(message);
+        if (logService != null) {
+            logService.append(type, ip, message);
+        }
+    }
+
+    public void setRegisterStatus(String text) {
+        registerStatus.setText(text);
+    }
+
+    public void checkFirewall() {
+        int port = config.getRegisterPort();
+        log("Consultando firewall (entrada porta " + port + ", regra "
+                + "FastNotify-Origem-Cadastro) ...");
+        Thread t = new Thread(() -> {
+            String status = FirewallChecker.checkInboundRule(
+                    "FastNotify-Origem-Cadastro", port);
+            javafx.application.Platform.runLater(() ->
+                    logAs(LogType.FIREWALL, "-", status));
+        }, "fastnotify-firewall-check");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    public void upsertDestino(DestinosStore.Destino nuevo) {
+        DestinosStore.Destino target = nuevo.normalized();
+        String hostName = target.connectHost();
+        String hostIp = target.effectiveHostIp();
+        for (int i = 0; i < destinos.size(); i++) {
+            DestinosStore.Destino actual = destinos.get(i);
+            boolean match = hostName.equalsIgnoreCase(actual.connectHost())
+                    || (!hostIp.isEmpty() && hostIp.equalsIgnoreCase(actual.connectHost()))
+                    || (!hostIp.isEmpty() && hostIp.equalsIgnoreCase(actual.effectiveHostIp()))
+                    || (!hostName.isEmpty() && !actual.effectiveHostIp().isEmpty()
+                    && hostName.equalsIgnoreCase(actual.effectiveHostIp()));
+            if (match) {
+                destinos.set(i, target);
+                persistDestinos();
+                log("Destino atualizado por cadastro: " + destinos.get(i).display());
+                return;
+            }
+        }
+        destinos.add(target);
+        persistDestinos();
+        log("Novo destino cadastrado: " + destinos.get(destinos.size() - 1).display());
     }
 
     public void applyConfigFromDisk() {

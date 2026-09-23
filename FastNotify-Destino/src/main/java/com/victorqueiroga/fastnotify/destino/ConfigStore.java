@@ -79,4 +79,76 @@ public class ConfigStore {
     public void setSoundEnabled(boolean enabled) {
         props.setProperty("soundEnabled", String.valueOf(enabled));
     }
+
+    public String getOrigemHost() {
+        return props.getProperty("origemHost", "");
+    }
+
+    public void setOrigemHost(String host) {
+        props.setProperty("origemHost", host == null ? "" : host);
+    }
+
+    public int getOrigemRegisterPort() {
+        try {
+            return Integer.parseInt(props.getProperty("origemRegisterPort", "9877"));
+        } catch (NumberFormatException e) {
+            return 9877;
+        }
+    }
+
+    public void setOrigemRegisterPort(int port) {
+        props.setProperty("origemRegisterPort", String.valueOf(port));
+    }
+
+    public String getOrigemRegisterToken() {
+        return props.getProperty("origemRegisterToken", "");
+    }
+
+    public void setOrigemRegisterToken(String token) {
+        props.setProperty("origemRegisterToken", token == null ? "" : token);
+    }
+
+    public String getAlias() {
+        return props.getProperty("alias", "");
+    }
+
+    public void setAlias(String alias) {
+        props.setProperty("alias", alias == null ? "" : alias);
+    }
+
+    public String getDepartment() {
+        return props.getProperty("department", "");
+    }
+
+    public void setDepartment(String department) {
+        props.setProperty("department", department == null ? "" : department);
+    }
+
+    public String getPsk() {
+        return props.getProperty("psk", "");
+    }
+
+    public void setPsk(String psk) {
+        props.setProperty("psk", psk == null ? "" : psk);
+    }
+
+    public String effectivePsk(String token) {
+        String psk = getPsk();
+        if (psk != null && !psk.isEmpty()) {
+            return psk;
+        }
+        return token == null ? "" : token;
+    }
+
+    public int getLogRetentionDays() {
+        try {
+            return Integer.parseInt(props.getProperty("logRetentionDays", "30"));
+        } catch (NumberFormatException e) {
+            return 30;
+        }
+    }
+
+    public void setLogRetentionDays(int days) {
+        props.setProperty("logRetentionDays", String.valueOf(Math.max(0, days)));
+    }
 }

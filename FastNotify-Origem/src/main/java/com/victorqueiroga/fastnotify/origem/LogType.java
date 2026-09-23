@@ -1,13 +1,11 @@
-package com.victorqueiroga.fastnotify.destino;
+package com.victorqueiroga.fastnotify.origem;
 
 public enum LogType {
-    MESSAGE("Mensagem"),
+    SEND("Envio"),
     TEST_OK("Teste OK"),
     TEST_FAIL("Teste falha"),
-    BLOCK("Bloqueio"),
-    REJECT("Rejeição"),
-    AUTH_OK("Token válido"),
     REGISTER("Cadastro"),
+    FIREWALL("Firewall"),
     CONFIG("Config"),
     ERROR("Erro"),
     INFO("Info");

@@ -98,6 +98,54 @@ public class ConfigStore {
         props.setProperty("token", token == null ? "" : token);
     }
 
+    public int getRegisterPort() {
+        try {
+            return Integer.parseInt(props.getProperty("registerPort", "9877"));
+        } catch (NumberFormatException e) {
+            return 9877;
+        }
+    }
+
+    public void setRegisterPort(int port) {
+        props.setProperty("registerPort", String.valueOf(port));
+    }
+
+    public String getRegisterToken() {
+        return props.getProperty("registerToken", "");
+    }
+
+    public void setRegisterToken(String token) {
+        props.setProperty("registerToken", token == null ? "" : token);
+    }
+
+    public String getPsk() {
+        return props.getProperty("psk", "");
+    }
+
+    public void setPsk(String psk) {
+        props.setProperty("psk", psk == null ? "" : psk);
+    }
+
+    public String effectivePsk(String token) {
+        String psk = getPsk();
+        if (psk != null && !psk.isEmpty()) {
+            return psk;
+        }
+        return token == null ? "" : token;
+    }
+
+    public int getLogRetentionDays() {
+        try {
+            return Integer.parseInt(props.getProperty("logRetentionDays", "30"));
+        } catch (NumberFormatException e) {
+            return 30;
+        }
+    }
+
+    public void setLogRetentionDays(int days) {
+        props.setProperty("logRetentionDays", String.valueOf(Math.max(0, days)));
+    }
+
     public List<FixedMessage> getFixedMessages() {
         List<FixedMessage> list = new ArrayList<>();
         int count = Integer.parseInt(props.getProperty("fixed.count", "0"));

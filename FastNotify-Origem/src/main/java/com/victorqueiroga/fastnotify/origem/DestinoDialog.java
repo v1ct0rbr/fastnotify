@@ -18,12 +18,15 @@ public class DestinoDialog extends Dialog<Boolean> {
     private final TextField tokenField = new TextField();
     private final Spinner<Integer> screenSpinner;
     private final Spinner<Integer> durationSpinner;
+    private final TextField departmentField = new TextField();
     private final Label testResult = new Label();
     private final Button testBtn = new Button("Testar destino");
+    private final ConfigStore config;
     private DestinosStore.Destino result;
     private boolean confirmed;
 
-    public DestinoDialog(Window owner, DestinosStore.Destino initial) {
+    public DestinoDialog(Window owner, DestinosStore.Destino initial, ConfigStore config) {
+        this.config = config;
         initOwner(owner);
         initModality(javafx.stage.Modality.APPLICATION_MODAL);
         setTitle(initial == null ? "Novo destino" : "Editar destino");
@@ -34,15 +37,15 @@ public class DestinoDialog extends Dialog<Boolean> {
             aliasField.setText(initial.alias());
         }
 
-        hostField.setPromptText("Hostname ou IP (ex.: recepcao.local)");
+        hostField.setPromptText("Hostname preferencial ou IP (ex.: recepcao.local)");
         hostField.setPrefColumnCount(24);
         if (initial != null) {
-            hostField.setText(initial.host());
+            hostField.setText(initial.connectHost());
         }
 
         DestinosStore.Destino base = initial == null
                 ? new DestinosStore.Destino(null, "", DestinosStore.DEFAULT_PORT,
-                        "", DestinosStore.DEFAULT_SCREEN, DestinosStore.DEFAULT_DURATION_MS)
+                        "", DestinosStore.DEFAULT_SCREEN, DestinosStore.DEFAULT_DURATION_MS, "")
                 : initial.normalized();
 
         portSpinner = new Spinner<>(1, 65535, base.effectivePortInt());
@@ -60,6 +63,10 @@ public class DestinoDialog extends Dialog<Boolean> {
         durationSpinner = new Spinner<>(500, 300000, (int) Math.min(base.effectiveDurationMs(), 300000), 500);
         durationSpinner.setEditable(true);
         durationSpinner.setPrefWidth(120);
+
+        departmentField.setPromptText("Departamento (ex.: Financeiro)");
+        departmentField.setPrefColumnCount(20);
+        departmentField.setText(base.effectiveDepartment());
 
         testResult.setStyle("-fx-text-fill: #64748B;");
         testBtn.setOnAction(e -> runFormTest());
@@ -81,16 +88,18 @@ public class DestinoDialog extends Dialog<Boolean> {
         grid.add(screenSpinner, 1, 4);
         grid.add(new Label("Tempo (ms):"), 0, 5);
         grid.add(durationSpinner, 1, 5);
+        grid.add(new Label("Departamento:"), 0, 6);
+        grid.add(departmentField, 1, 6);
 
         Label hint = new Label(
                 "Cada destino é isolado: porta, token, tela e tempo valem só para ele.");
         hint.setStyle("-fx-text-fill: #64748B; -fx-font-size: 11px;");
         hint.setWrapText(true);
-        grid.add(hint, 1, 6);
+        grid.add(hint, 1, 7);
 
         HBox testRow = new HBox(8, testBtn, testResult);
         testRow.setAlignment(Pos.CENTER_LEFT);
-        grid.add(testRow, 1, 7);
+        grid.add(testRow, 1, 8);
 
         getDialogPane().setContent(grid);
         getDialogPane().setPrefWidth(520);
@@ -112,13 +121,17 @@ public class DestinoDialog extends Dialog<Boolean> {
             }
             String alias = aliasField.getText().trim();
             confirmed = true;
+            String priorIp = initial == null ? "" : initial.effectiveHostIp();
             result = new DestinosStore.Destino(
                     alias.isEmpty() ? host : alias,
                     host,
                     portSpinner.getValue(),
                     tokenField.getText().trim(),
                     screenSpinner.getValue(),
-                    durationSpinner.getValue().longValue()).normalized();
+                    durationSpinner.getValue().longValue(),
+                    departmentField.getText() == null ? "" : departmentField.getText().trim(),
+                    priorIp)
+                    .normalized();
         });
 
         setResultConverter(button -> button == javafx.scene.control.ButtonType.OK);
@@ -139,7 +152,8 @@ public class DestinoDialog extends Dialog<Boolean> {
 
         Thread t = new Thread(() -> {
             try {
-                Protocol.Ack ack = NotificationClient.test(host, port, token);
+                Protocol.Ack ack = NotificationClient.test(host, port, token,
+                        config == null ? "" : config.effectivePsk(token));
                 javafx.application.Platform.runLater(() -> {
                     testBtn.setDisable(false);
                     if (ack.ok()) {

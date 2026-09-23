@@ -1,4 +1,4 @@
-package com.victorqueiroga.fastnotify.destino;
+package com.victorqueiroga.fastnotify.origem;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -45,7 +45,7 @@ public class LogService implements AutoCloseable {
     private final ConcurrentLinkedQueue<LogEntry> cache = new ConcurrentLinkedQueue<>();
     private final ScheduledExecutorService scheduler =
             Executors.newSingleThreadScheduledExecutor(r -> {
-                Thread t = new Thread(r, "fastnotify-log-flush");
+                Thread t = new Thread(r, "fastnotify-origem-log-flush");
                 t.setDaemon(true);
                 return t;
             });

@@ -18,13 +18,22 @@ public class ReceiverApp extends Application {
     private LogService logService;
     private LogViewer logViewer;
     private TrayIcon trayIcon;
+    private SingleInstanceLock instanceLock;
 
     @Override
     public void start(Stage stage) {
         Platform.setImplicitExit(false);
         this.stage = stage;
-        this.config = new ConfigStore(resolveConfigPath("destino.properties"));
-        this.logService = new LogService(resolveLogsDir());
+        java.nio.file.Path configPath = resolveConfigPath("destino.properties");
+        if (!acquireSingleInstanceLock(configPath)) {
+            Platform.setImplicitExit(true);
+            Platform.exit();
+            return;
+        }
+        this.config = new ConfigStore(configPath);
+        this.logService = new LogService(
+                resolveLogsDir(), config.getLogRetentionDays());
+        UserNames.warmUp();
         this.logViewer = new LogViewer(logService);
         this.view = new ReceiverView(config, logService);
 
@@ -38,6 +47,44 @@ public class ReceiverApp extends Application {
         view.log("Iniciando no tray. Escuta ativa; clique no ícone para abrir a janela.");
         view.log("Config: " + config.getFile().toAbsolutePath());
         setupTray();
+    }
+
+    private boolean acquireSingleInstanceLock(java.nio.file.Path configPath) {
+        java.nio.file.Path lockFile = configPath.resolveSibling("destino.lock");
+        try {
+            instanceLock = SingleInstanceLock.tryLock(lockFile);
+        } catch (Exception ex) {
+            showAlreadyRunningDialog("Não foi possível criar a trava de instância:\n"
+                    + ex.getMessage());
+            return false;
+        }
+        if (instanceLock == null) {
+            showAlreadyRunningDialog(
+                    "FastNotify Destino já está em execução nesta máquina.\n\n"
+                            + "Feche a instância atual (tray → Sair) e abra de novo.");
+            return false;
+        }
+        return true;
+    }
+
+    private void showAlreadyRunningDialog(String message) {
+        try {
+            javafx.scene.control.Alert alert = new javafx.scene.control.Alert(
+                    javafx.scene.control.Alert.AlertType.WARNING);
+            alert.setTitle("FastNotify - Destino");
+            alert.setHeaderText("Instância já em execução");
+            alert.setContentText(message);
+            alert.showAndWait();
+        } catch (Exception ignored) {
+            System.err.println(message);
+        }
+    }
+
+    private void releaseSingleInstanceLock() {
+        if (instanceLock != null) {
+            instanceLock.close();
+            instanceLock = null;
+        }
     }
 
     private void onCloseRequest(WindowEvent e) {
@@ -115,6 +162,12 @@ public class ReceiverApp extends Application {
             dialog.showAndWait();
             if (dialog.isConfirmed()) {
                 view.applyConfigFromDisk(dialog.isPortChanged());
+                if (logService != null && dialog.isRetentionChanged()) {
+                    int deleted = logService.setRetentionDays(config.getLogRetentionDays());
+                    view.logAs(LogType.CONFIG, "-",
+                            "Retenção de logs = " + config.getLogRetentionDays()
+                                    + " dia(s); excluído(s): " + deleted);
+                }
                 view.log("Configurações atualizadas via tray → "
                         + config.getFile().toAbsolutePath());
             }
@@ -138,6 +191,7 @@ public class ReceiverApp extends Application {
                 SystemTray.getSystemTray().remove(trayIcon);
                 trayIcon = null;
             }
+            releaseSingleInstanceLock();
             Platform.setImplicitExit(true);
             Platform.exit();
         });
@@ -173,6 +227,7 @@ public class ReceiverApp extends Application {
             SystemTray.getSystemTray().remove(trayIcon);
             trayIcon = null;
         }
+        releaseSingleInstanceLock();
     }
 
     public static void main(String[] args) {

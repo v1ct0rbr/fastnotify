@@ -27,6 +27,13 @@ public class ReceiverView extends BorderPane {
     private final Spinner<Integer> portSpinner;
     private final TextField tokenField = new TextField();
     private final CheckBox soundCheck = new CheckBox("Som de alerta ao abrir notificação");
+    private final TextField origemHostField = new TextField();
+    private final Spinner<Integer> origemPortSpinner;
+    private final TextField origemTokenField = new TextField();
+    private final TextField aliasField = new TextField();
+    private final TextField departmentField = new TextField();
+    private final Button registerBtn = new Button("Cadastrar nesta Origem");
+    private final Label registerStatus = new Label("");
     private final TextArea logArea = new TextArea();
     private final Label statusLabel = new Label("Parado");
     private final ListenerService listener;
@@ -44,17 +51,37 @@ public class ReceiverView extends BorderPane {
         tokenField.setPrefColumnCount(18);
         soundCheck.setSelected(config.isSoundEnabled());
 
+        origemHostField.setText(config.getOrigemHost());
+        origemHostField.setPromptText("ip ou nome da Origem");
+        origemHostField.setPrefColumnCount(14);
+        origemPortSpinner = new Spinner<>(1, 65535, config.getOrigemRegisterPort());
+        origemPortSpinner.setEditable(true);
+        origemPortSpinner.setPrefWidth(90);
+        origemTokenField.setText(config.getOrigemRegisterToken());
+        origemTokenField.setPromptText("token da Origem");
+        origemTokenField.setPrefColumnCount(12);
+        aliasField.setText(config.getAlias());
+        aliasField.setPromptText("nome deste destino");
+        aliasField.setPrefColumnCount(10);
+        departmentField.setText(config.getDepartment());
+        departmentField.setPromptText("departamento (ex.: Financeiro)");
+        departmentField.setPrefColumnCount(12);
+        registerStatus.setStyle("-fx-font-size: 11px;");
+
         logArea.setEditable(false);
         logArea.setWrapText(false);
+        LocalHostInfo.warmUp();
 
         listener = new ListenerService(
                 () -> portSpinner.getValue(),
                 () -> tokenField.getText().trim(),
+                () -> config.effectivePsk(tokenField.getText().trim()),
                 () -> soundCheck.isSelected(),
                 this::onEvent,
                 logService);
 
-        setTop(buildConfigPane());
+        VBox top = new VBox(buildConfigPane(), buildRegisterPane());
+        setTop(top);
         setCenter(buildLogPane());
         setBottom(buildStatusBar());
     }
@@ -62,6 +89,20 @@ public class ReceiverView extends BorderPane {
     public void startListener() {
         listener.start();
         log("Destino iniciado. Monitores: " + describeScreens());
+        checkFirewall();
+    }
+
+    private void checkFirewall() {
+        int port = portSpinner.getValue();
+        log("Consultando firewall (entrada porta " + port + ", regra "
+                + "FastNotify-Destino-Notificacao) ...");
+        Thread t = new Thread(() -> {
+            String status = FirewallChecker.checkInboundRule(
+                    "FastNotify-Destino-Notificacao", port);
+            Platform.runLater(() -> log(status));
+        }, "fastnotify-firewall-check");
+        t.setDaemon(true);
+        t.start();
     }
 
     private TitledPane buildConfigPane() {
@@ -83,8 +124,12 @@ public class ReceiverView extends BorderPane {
             listener.start();
             statusLabel.setText("Reiniciando...");
         });
+        Button firewall = new Button("Firewall");
+        firewall.setTooltip(new javafx.scene.control.Tooltip(
+                "Consulta se a porta de notificação tem regra de entrada no Windows"));
+        firewall.setOnAction(e -> checkFirewall());
 
-        HBox actions = new HBox(8, save, restart);
+        HBox actions = new HBox(8, save, restart, firewall);
         actions.setAlignment(Pos.CENTER_LEFT);
         actions.setPadding(new Insets(0, 8, 8, 8));
 
@@ -93,6 +138,139 @@ public class ReceiverView extends BorderPane {
         tp.setExpanded(true);
         tp.setCollapsible(false);
         return tp;
+    }
+
+    private TitledPane buildRegisterPane() {
+        HBox localRow = new HBox(8,
+                new Label("Este equipamento:"),
+                new Label(LocalHostInfo.display()));
+        localRow.setAlignment(Pos.CENTER_LEFT);
+        localRow.setPadding(new Insets(8, 8, 0, 8));
+        localRow.setStyle("-fx-font-size: 11px; -fx-text-fill: #64748B;");
+
+        HBox row = new HBox(8,
+                new Label("Origem:"), origemHostField,
+                new Label("Porta cadastro:"), origemPortSpinner,
+                new Label("Token origem:"), origemTokenField);
+        row.setAlignment(Pos.CENTER_LEFT);
+        row.setPadding(new Insets(8));
+
+        HBox row2 = new HBox(8,
+                new Label("Nome (padrão: host):"), aliasField,
+                new Label("Departamento:"), departmentField);
+        row2.setAlignment(Pos.CENTER_LEFT);
+        row2.setPadding(new Insets(0, 8, 0, 8));
+
+        if (aliasField.getText() == null || aliasField.getText().isBlank()) {
+            aliasField.setText(LocalHostInfo.hostname());
+        }
+
+        registerBtn.setStyle("-fx-font-weight: bold; -fx-background-color: #2563EB;"
+                + " -fx-text-fill: white;");
+        registerBtn.setOnAction(e -> runRegister());
+
+        Hint hint = new Hint(
+                "Hostname e IP deste equipamento são lidos do SO (acima) e enviados"
+                        + " separados; a Origem prefere o hostname (o IP é dinâmico)."
+                        + " Informe só a Origem (host/porta/token), nome e departamento.");
+        hint.setWrapText(true);
+
+        HBox actions = new HBox(8, registerBtn, registerStatus);
+        actions.setAlignment(Pos.CENTER_LEFT);
+        actions.setPadding(new Insets(0, 8, 4, 8));
+
+        VBox box = new VBox(4, localRow, row, row2, hint, actions);
+        TitledPane tp = new TitledPane("Cadastrar nesta Origem", box);
+        tp.setExpanded(true);
+        tp.setCollapsible(false);
+        return tp;
+    }
+
+    private static final class Hint extends Label {
+        private Hint(String text) {
+            super(text);
+            setStyle("-fx-text-fill: #64748B; -fx-font-size: 11px;");
+            setPadding(new Insets(0, 8, 0, 8));
+        }
+    }
+
+    private void runRegister() {
+        String host = origemHostField.getText().trim();
+        int registerPort = origemPortSpinner.getValue();
+        String origemToken = origemTokenField.getText().trim();
+        String alias = aliasField.getText().trim();
+        String department = departmentField.getText() == null
+                ? "" : departmentField.getText().trim();
+        int listenPort = portSpinner.getValue();
+        String destinoToken = tokenField.getText().trim();
+
+        if (host.isEmpty()) {
+            setRegisterStatus("Informe o host da Origem.", true);
+            return;
+        }
+        if (origemToken.isEmpty()) {
+            setRegisterStatus("Informe o token de cadastro da Origem.", true);
+            return;
+        }
+
+        if (alias == null || alias.isBlank()) {
+            alias = LocalHostInfo.hostname();
+            aliasField.setText(alias);
+        }
+
+        config.setOrigemHost(host);
+        config.setOrigemRegisterPort(registerPort);
+        config.setOrigemRegisterToken(origemToken);
+        config.setAlias(alias);
+        config.setDepartment(department);
+        config.save();
+
+        Protocol.Registration reg = new Protocol.Registration(
+                origemToken, alias, listenPort, destinoToken, 0, 5000, department,
+                LocalHostInfo.hostname(), LocalHostInfo.primaryIp());
+
+        registerBtn.setDisable(true);
+        setRegisterStatus("Cadastrando em " + host + ":" + registerPort + " ...", false);
+        log("Enviando cadastro para " + host + ":" + registerPort
+                + " (porta de escuta " + listenPort + ") ...");
+
+        Thread t = new Thread(() -> {
+            try {
+                Protocol.Ack ack = RegistrationClient.register(
+                        host, registerPort, reg, config.effectivePsk(origemToken));
+                Platform.runLater(() -> {
+                    registerBtn.setDisable(false);
+                    if (ack.ok()) {
+                        setRegisterStatus("OK — " + ack.detail(), false);
+                        log("CADASTRO OK — " + host + ":" + registerPort + " — " + ack.detail());
+                        logService.append(LogType.REGISTER, host,
+                                "Cadastro aceito pela Origem: " + ack.detail()
+                                        + " (escuta " + listenPort + ")");
+                    } else {
+                        setRegisterStatus("Recusado — " + ack.detail(), true);
+                        log("CADASTRO RECUSADO — " + ack.detail());
+                        logService.append(LogType.ERROR, host,
+                                "Cadastro recusado: " + ack.detail());
+                    }
+                });
+            } catch (Exception ex) {
+                Platform.runLater(() -> {
+                    registerBtn.setDisable(false);
+                    setRegisterStatus("Falha — " + ex.getMessage(), true);
+                    log("CADASTRO FALHOU — " + ex.getMessage());
+                    logService.append(LogType.ERROR, host,
+                            "Falha no cadastro: " + ex.getMessage());
+                });
+            }
+        }, "fastnotify-register");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private void setRegisterStatus(String text, boolean error) {
+        registerStatus.setText(text);
+        registerStatus.setStyle("-fx-font-size: 11px;"
+                + (error ? " -fx-text-fill: #DC2626;" : " -fx-text-fill: #16A34A;"));
     }
 
     private TitledPane buildLogPane() {
@@ -154,10 +332,22 @@ public class ReceiverView extends BorderPane {
         logArea.positionCaret(logArea.getLength());
     }
 
+    public void logAs(LogType type, String ip, String message) {
+        log(message);
+        if (logService != null) {
+            logService.append(type, ip, message);
+        }
+    }
+
     public void applyConfigFromDisk(boolean portChanged) {
         tokenField.setText(config.getToken());
         portSpinner.getValueFactory().setValue(config.getPort());
         soundCheck.setSelected(config.isSoundEnabled());
+        origemHostField.setText(config.getOrigemHost());
+        origemPortSpinner.getValueFactory().setValue(config.getOrigemRegisterPort());
+        origemTokenField.setText(config.getOrigemRegisterToken());
+        aliasField.setText(config.getAlias());
+        departmentField.setText(config.getDepartment());
         if (portChanged) {
             restartListener();
         }

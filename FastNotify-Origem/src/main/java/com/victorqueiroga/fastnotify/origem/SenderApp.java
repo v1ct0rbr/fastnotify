@@ -18,16 +18,29 @@ public class SenderApp extends Application {
     private MessageStore messageStore;
     private DestinosStore destinosStore;
     private TrayIcon trayIcon;
+    private RegistrationListener registrationListener;
+    private SingleInstanceLock instanceLock;
+    private LogService logService;
+    private LogViewer logViewer;
 
     @Override
     public void start(Stage stage) {
         Platform.setImplicitExit(false);
         this.stage = stage;
         java.nio.file.Path configPath = resolveConfigPath("origem.properties");
+        if (!acquireSingleInstanceLock(configPath)) {
+            Platform.setImplicitExit(true);
+            Platform.exit();
+            return;
+        }
         this.config = new ConfigStore(configPath);
         this.messageStore = new MessageStore(configPath.resolveSibling("messages.properties"), config);
         this.destinosStore = new DestinosStore(configPath.resolveSibling("destinos.properties"));
-        this.view = new SenderView(messageStore, destinosStore);
+        this.logService = new LogService(
+                resolveLogsDir(configPath), config.getLogRetentionDays());
+        UserNames.warmUp();
+        this.logViewer = new LogViewer(logService);
+        this.view = new SenderView(messageStore, destinosStore, config, logService);
 
         stage.setTitle("FastNotify - Origem");
         stage.setScene(new Scene(view, 860, 620));
@@ -40,7 +53,51 @@ public class SenderApp extends Application {
                 + " (" + view.getMessageCount() + " carregada(s))");
         view.log("Destinos: " + destinosStore.getFile().toAbsolutePath()
                 + " (" + view.getDestinoCount() + " carregado(s))");
+        registrationListener = new RegistrationListener(
+                config::getRegisterPort, config::getRegisterToken,
+                () -> config.effectivePsk(config.getRegisterToken()),
+                view, destinosStore);
+        registrationListener.start();
+        view.setRegisterStatus("Cadastro: porta " + config.getRegisterPort());
         setupTray();
+    }
+
+    private boolean acquireSingleInstanceLock(java.nio.file.Path configPath) {
+        java.nio.file.Path lockFile = configPath.resolveSibling("origem.lock");
+        try {
+            instanceLock = SingleInstanceLock.tryLock(lockFile);
+        } catch (Exception ex) {
+            showAlreadyRunningDialog("Não foi possível criar a trava de instância:\n"
+                    + ex.getMessage());
+            return false;
+        }
+        if (instanceLock == null) {
+            showAlreadyRunningDialog(
+                    "FastNotify Origem já está em execução nesta máquina.\n\n"
+                            + "Feche a instância atual (tray → Sair) e abra de novo.");
+            return false;
+        }
+        return true;
+    }
+
+    private void showAlreadyRunningDialog(String message) {
+        try {
+            javafx.scene.control.Alert alert = new javafx.scene.control.Alert(
+                    javafx.scene.control.Alert.AlertType.WARNING);
+            alert.setTitle("FastNotify - Origem");
+            alert.setHeaderText("Instância já em execução");
+            alert.setContentText(message);
+            alert.showAndWait();
+        } catch (Exception ignored) {
+            System.err.println(message);
+        }
+    }
+
+    private void releaseSingleInstanceLock() {
+        if (instanceLock != null) {
+            instanceLock.close();
+            instanceLock = null;
+        }
     }
 
     private void onCloseRequest(WindowEvent e) {
@@ -77,6 +134,9 @@ public class SenderApp extends Application {
             MenuItem settings = new MenuItem("Configurações...");
             settings.addActionListener(e -> openConfigDialog());
 
+            MenuItem logs = new MenuItem("Ver logs...");
+            logs.addActionListener(e -> openLogs());
+
             MenuItem bell = new MenuItem("🔔 Campainha");
             bell.addActionListener(e -> {
                 Platform.runLater(() -> view.sendCampainha());
@@ -87,6 +147,7 @@ public class SenderApp extends Application {
 
             menu.add(show);
             menu.add(settings);
+            menu.add(logs);
             menu.add(bell);
             menu.addSeparator();
             menu.add(exit);
@@ -117,20 +178,45 @@ public class SenderApp extends Application {
         Platform.runLater(() -> {
             showStage();
             ConfigDialog dialog = new ConfigDialog(
-                    stage.isShowing() ? stage : null, destinosStore);
+                    stage.isShowing() ? stage : null, destinosStore, config);
             dialog.showAndWait();
             if (dialog.isConfirmed()) {
                 view.applyConfigFromDisk();
+                if (logService != null && dialog.isRetentionChanged()) {
+                    int deleted = logService.setRetentionDays(config.getLogRetentionDays());
+                    view.logAs(LogType.CONFIG, "-",
+                            "Retenção de logs = " + config.getLogRetentionDays()
+                                    + " dia(s); excluído(s): " + deleted);
+                }
+                if (dialog.isRegisterPortChanged() && registrationListener != null) {
+                    registrationListener.restart();
+                    view.setRegisterStatus("Cadastro: porta " + config.getRegisterPort());
+                }
             }
         });
     }
 
+    private void openLogs() {
+        Platform.runLater(() -> logViewer.show(stage.isShowing() ? stage : null));
+    }
+
     private void exitApp() {
         Platform.runLater(() -> {
+            if (registrationListener != null) {
+                registrationListener.stop();
+            }
+            if (logService != null) {
+                int flushed = logService.flush();
+                if (flushed > 0 && view != null) {
+                    view.log("Logs gravados ao sair: " + flushed + " linha(s).");
+                }
+                logService.close();
+            }
             if (SystemTray.isSupported() && trayIcon != null) {
                 SystemTray.getSystemTray().remove(trayIcon);
                 trayIcon = null;
             }
+            releaseSingleInstanceLock();
             Platform.setImplicitExit(true);
             Platform.exit();
         });
@@ -144,12 +230,36 @@ public class SenderApp extends Application {
         return java.nio.file.Path.of("config", fileName);
     }
 
+    static java.nio.file.Path resolveLogsDir(java.nio.file.Path configPath) {
+        String override = System.getProperty("fastnotify.logs");
+        if (override != null && !override.isBlank()) {
+            return java.nio.file.Path.of(override);
+        }
+        java.nio.file.Path parent = configPath.getParent();
+        if (parent != null && parent.getParent() != null) {
+            return parent.getParent().resolve("logs");
+        }
+        if (parent != null) {
+            return parent.resolve("logs");
+        }
+        return java.nio.file.Path.of("logs");
+    }
+
     @Override
     public void stop() {
+        if (registrationListener != null) {
+            registrationListener.stop();
+            registrationListener = null;
+        }
+        if (logService != null) {
+            logService.close();
+            logService = null;
+        }
         if (SystemTray.isSupported() && trayIcon != null) {
             SystemTray.getSystemTray().remove(trayIcon);
             trayIcon = null;
         }
+        releaseSingleInstanceLock();
     }
 
     public static void main(String[] args) {
