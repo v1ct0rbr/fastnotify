@@ -39,6 +39,7 @@ public class LogViewer {
         if (owner != null) {
             stage.initOwner(owner);
         }
+        TrayIcons.applyWindowIcons(stage, "/img/mensagem-recebida.svg");
 
         DatePicker datePicker = new DatePicker(LocalDate.now());
         ComboBox<String> filter = new ComboBox<>();

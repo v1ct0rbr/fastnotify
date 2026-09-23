@@ -55,6 +55,7 @@ Gera em cada `*/target/`:
 - `fastnotify-{origem,destino}.jar`
 - `FastNotify-{Origem,Destino}.exe` (Launch4j, ícone no Windows)
 - `lib/`, `config/`, e `sounds/` no Destino
+- `instalar-inicializacao-*.{bat,ps1}` (inicializar com o Windows)
 
 Se o app estiver rodando (arquivos travados), use `mvn package` sem `clean`.
 
@@ -195,25 +196,28 @@ O `.jar` usa o ícone do Java. Após o build, o **Launch4j** gera:
 
 ## Inicializar com o Windows (Win10+)
 
-Na **raiz do projeto**, scripts **separados** por app:
+Os scripts ficam em `src/main/resources/` e são **copiados para `target/`** no `mvn package` (ao lado do `.exe`):
 
 ```bat
+cd FastNotify-Origem\target
 instalar-inicializacao-origem.bat
+
+cd ..\..\FastNotify-Destino\target
 instalar-inicializacao-destino.bat
 ```
 
-Ou:
+Ou a partir da pasta do script (`.bat`/`.ps1` em `target\`, resources ou raiz do projeto):
 
 ```bat
 powershell -ExecutionPolicy Bypass -File instalar-inicializacao-origem.ps1
 powershell -ExecutionPolicy Bypass -File instalar-inicializacao-destino.ps1
 ```
 
-Cada script (sem admin — usuário atual):
+Cada script (sem admin — usuário atual) usa a **pasta atual do script** para achar o app:
 
-1. Localiza o `.exe` do app (`FastNotify-*/target/`, ou busca recursiva).
+1. Procura o `.exe` **ao lado do script** (`target\FastNotify-*.exe`); se não, sobe os diretórios (`.\`, `.\target\`) e, por fim, busca recursiva.
 2. Remove entrada antiga em `HKCU\...\CurrentVersion\Run` e atalhos antigos daquele app.
-3. Cria a entrada apontando para o caminho atual.
+3. Cria a entrada apontando para o caminho do `.exe` encontrado.
 
 Chaves: `FastNotify-Origem` e `FastNotify-Destino`. Para remover: apague a chave no Registro ou o atalho em `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup`.
 
@@ -221,30 +225,21 @@ Chaves: `FastNotify-Origem` e `FastNotify-Destino`. Para remover: apague a chave
 
 ## Firewall (liberar portas)
 
-Na **raiz do projeto** (Windows, requer **Administrador** para criar regras):
+Scripts **por app** em `src/main/resources/` (copiados para `target/` no `mvn package`). A **porta vem só do** `.properties` do app — não há porta embutida no script.
+
+| App | Liberar (admin) | Remover (admin) | Config lida | Chave | Regra (entrada TCP) |
+|-----|-----------------|-----------------|-------------|-------|---------------------|
+| **Origem** | `FastNotify-Origem\target\liberar-porta-origem.bat` | `remover-porta-origem.bat` | `config/origem.properties` | `registerPort` | `FastNotify-Origem-Cadastro` |
+| **Destino** | `FastNotify-Destino\target\liberar-porta-destino.bat` | `remover-porta-destino.bat` | `config/destino.properties` | `port` | `FastNotify-Destino-Notificacao` |
+
+No app: **Configurações → Liberar porta** / **Remover regra** / **Verificar firewall**. O `.ps1` **consulta antes**: liberar → cria ou **atualiza**; remover → apaga se existir. Porta **só** do `.properties` (sem valor fixo no script).
+
+Status via linha de comando (pode ser sem admin):
 
 ```bat
-liberar-portas-firewall.bat
+powershell -ExecutionPolicy Bypass -File liberar-porta-origem.ps1 -Acao Status
+powershell -ExecutionPolicy Bypass -File liberar-porta-destino.ps1 -Acao Status
 ```
-
-O script PowerShell `liberar-portas-firewall.ps1` **lê as portas** em `config/`:
-
-| Arquivo | Chave | Regra criada (entrada TCP) |
-|---------|-------|----------------------------|
-| `config/destino.properties` | `port` (padrão `9876`) | `FastNotify-Destino-Notificacao` |
-| `config/origem.properties` | `registerPort` (padrão `9877`) | `FastNotify-Origem-Cadastro` |
-
-Outros comandos:
-
-```bat
-rem Status das regras (pode ser sem admin)
-powershell -ExecutionPolicy Bypass -File liberar-portas-firewall.ps1 -Acao Status
-
-rem Remover regras (admin)
-remover-portas-firewall.bat
-```
-
-Nos **apps**, botão **Firewall** (Origem: barra superior; Destino: Configuração) consulta se a regra da porta configurada existe/está Allow — o resultado vai no log.
 
 **Saída** (Origem → Destino): o Windows libera outbound por padrão; se a rede bloquear, crie regra de saída manualmente para a porta do Destino.
 
@@ -254,15 +249,21 @@ Nos **apps**, botão **Firewall** (Origem: barra superior; Destino: Configuraç�
 
 ```text
 fastnotify/
-├── FastNotify-Origem/     # envio
-├── FastNotify-Destino/    # recepção
+├── FastNotify-Origem/     # envio (scripts em src/main/resources → target/)
+├── FastNotify-Destino/    # recepção (scripts em src/main/resources → target/)
 ├── config/                # config em runtime (1ª execução)
-├── logs/                  # logs do Destino
-├── instalar-inicializacao-origem.{bat,ps1}
-├── instalar-inicializacao-destino.{bat,ps1}
-├── liberar-portas-firewall.{bat,ps1}
-└── remover-portas-firewall.bat
+└── logs/                  # logs do Destino
 ```
+
+Scripts (após `mvn package`, em cada `target/`):
+
+- `instalar-inicializacao-*.{bat,ps1}` / `remover-inicializacao-*.{bat,ps1}`
+- `liberar-porta-*.{bat,ps1}` / `remover-porta-*.bat`
+
+Nos **Configurações** de cada app:
+
+- **Verificar firewall** / **Liberar porta** / **Remover regra** — o `.ps1` **consulta** a regra: liberar cria se não existir e **atualiza** se existir; remover apaga se existir (senão avisa). Porta **só** do `.properties` do app.
+- **Inicializar com Windows** / **Remover inicialização** — rodam `instalar-inicializacao-*.ps1` e `remover-inicializacao-*.ps1` (HKCU Run, sem admin).
 
 Mais detalhes por app:
 
@@ -273,7 +274,7 @@ Mais detalhes por app:
 
 ## Dicas
 
-- **Firewall**: rode `liberar-portas-firewall.bat` (admin) — lê `config/*` e abre as entradas `9876`/`9877` (ou as portas configuradas). Botão **Firewall** nos apps mostra o status.
+- **Firewall**: por app em `target/` — `liberar-porta-origem.bat` / `liberar-porta-destino.bat` (admin) leem a porta só do `.properties` correspondente; **Configurações → Liberar porta** e **Verificar firewall** no app.
 - **Teste rápido**: Origem → **Testar todos** (ou duplo clique) → Destino deve logar `TEST_OK`.
 - **Auto-cadastro**: Origem com **Token de cadastro** preenchido → Destino preenche host + token → **Cadastrar nesta Origem** → item aparece na lista da Origem.
 - **Sem seleção na lista** = envia para **todos** os destinos.

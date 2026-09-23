@@ -82,6 +82,10 @@
                                 <copy todir="${project.build.directory}/sounds" overwrite="true">
                                     <fileset dir="${project.basedir}/src/main/resources/sounds"/>
                                 </copy>
+                                <copy todir="${project.build.directory}" overwrite="true">
+                                    <fileset dir="${project.basedir}/src/main/resources"
+                                             includes="instalar-inicializacao-destino.bat,instalar-inicializacao-destino.ps1,remover-inicializacao-destino.bat,remover-inicializacao-destino.ps1,liberar-porta-destino.bat,liberar-porta-destino.ps1,remover-porta-destino.bat"/>
+                                </copy>
                             </target>
                         </configuration>
                     </execution>

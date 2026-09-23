@@ -36,12 +36,14 @@ public class ReceiverApp extends Application {
         UserNames.warmUp();
         this.logViewer = new LogViewer(logService);
         this.view = new ReceiverView(config, logService);
+        this.view.setOpenSettingsAction(this::openConfigDialog);
 
         stage.setTitle("FastNotify - Destino");
-        stage.setScene(new Scene(view, 620, 440));
-        stage.setMinWidth(520);
-        stage.setMinHeight(360);
+        stage.setScene(new Scene(view, 680, 520));
+        stage.setMinWidth(560);
+        stage.setMinHeight(400);
         stage.setOnCloseRequest(this::onCloseRequest);
+        TrayIcons.applyWindowIcons(stage, "/img/mensagem-recebida.svg");
 
         view.startListener();
         view.log("Iniciando no tray. Escuta ativa; clique no ícone para abrir a janela.");
@@ -157,6 +159,7 @@ public class ReceiverApp extends Application {
 
     private void openConfigDialog() {
         Platform.runLater(() -> {
+            showStage();
             ConfigDialog dialog = new ConfigDialog(
                     stage.isShowing() ? stage : null, config);
             dialog.showAndWait();

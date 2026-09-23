@@ -41,12 +41,14 @@ public class SenderApp extends Application {
         UserNames.warmUp();
         this.logViewer = new LogViewer(logService);
         this.view = new SenderView(messageStore, destinosStore, config, logService);
+        this.view.setOpenSettingsAction(this::openConfigDialog);
 
         stage.setTitle("FastNotify - Origem");
         stage.setScene(new Scene(view, 860, 620));
         stage.setMinWidth(720);
         stage.setMinHeight(480);
         stage.setOnCloseRequest(this::onCloseRequest);
+        TrayIcons.applyWindowIcons(stage, "/img/mensagem-enviada.svg");
 
         view.log("Iniciando no tray. Clique no ícone para abrir a janela.");
         view.log("Mensagens: " + messageStore.getFile().toAbsolutePath()

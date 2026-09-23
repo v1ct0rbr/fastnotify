@@ -28,7 +28,9 @@ Aplicativo **Maven + JavaFX** de envio de notificações em rede para o **FastNo
 - **Campainha** (botão amarelo 🔔 e item no tray): mensagem padrão sem abrir o diálogo; usa o tempo de cada destino (máx. 8s)
 - Log de envios
 - **Tray icon** (SVG `img/mensagem-enviada.svg`) com menu: Abrir / **Configurações...** / **🔔 Campainha** / Sair
-- Botão **Firewall**: consulta se a regra de entrada da porta de cadastro existe/está ativa no Windows
+- Janela principal com botão **Configurações** (porta/token de cadastro, PSK, retenção, **firewall** e **inicialização com o Windows**); **sem** “envio rápido por tipo” na toolbar
+- Em **Configurações**: **Verificar firewall**, **Liberar porta** (cria/atualiza regra), **Remover regra**; **Inicializar com Windows** e **Remover inicialização** (scripts em `target/`, HKCU Run)
+- Ícone da janela a partir do mesmo SVG (`TrayIcons.applyWindowIcons`)
 - Fechar a janela minimiza para o tray (o app continua rodando)
 - **Inicia no tray** (sem janela principal); duplo clique / **Abrir janela** no menu do tray abre a UI
 - **Instância única**: se já houver uma Origem aberta, o novo atalho/exe mostra aviso e encerra (trava `config/origem.lock`)
@@ -49,11 +51,11 @@ Override opcional: `-Dfastnotify.config=Caminho\custom.properties`.
 
 ### Auto-cadastro (`FASTNOTIFY/REG`)
 
-1. Tray → **Configurações...** → defina **Porta de cadastro** e **Token de cadastro** (vazio = cadastro recusado). Libere a porta no firewall (`liberar-portas-firewall.bat` na raiz do projeto, admin).
+1. Tray → **Configurações...** → defina **Porta de cadastro** e **Token de cadastro** (vazio = cadastro recusado). Libere a porta: **Configurações → Liberar porta** ou `target\liberar-porta-origem.bat` (admin).
 2. No Destino, painel **Cadastrar nesta Origem**: host/IP desta Origem, porta, token, nome (hostname/IP do Destino saem do SO).
 3. A Origem valida o token, grava o destino **preferindo hostname** (IP separado) e responde **OK — Cadastrado/Atualizado**.
 
-Botão **Firewall** na barra mostra se a regra `FastNotify-Origem-Cadastro` da porta configurada está Allow/ativa.
+Em **Configurações**: **Verificar firewall** mostra se a regra `FastNotify-Origem-Cadastro` está Allow/ativa; **Liberar porta** consulta e cria/atualiza; **Remover regra** consulta e apaga — a **porta é lida só de** `config/origem.properties` (`registerPort`). **Inicializar com Windows** / **Remover inicialização** rodam os scripts em `target/` (HKCU Run).
 
 ## Build
 
@@ -67,6 +69,8 @@ Gera:
 - `target/FastNotify-Origem.exe` (Launch4j, ícone `img/mensagem-enviada.ico`)
 - `target/lib/` (dependências)
 - `target/config/`
+- `target/instalar-inicializacao-origem.{bat,ps1}` e `target/remover-inicializacao-origem.{bat,ps1}` (HKCU Run)
+- `target/liberar-porta-origem.{bat,ps1}` e `target/remover-porta-origem.bat` (firewall; consulta antes; porta só de `config/origem.properties`)
 
 O `.jar` sozinho não tem ícone no Windows — use o `.exe` gerado (fique na mesma pasta do jar + `lib/`).
 

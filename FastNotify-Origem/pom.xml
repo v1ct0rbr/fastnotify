@@ -78,6 +78,10 @@
                                 <copy todir="${project.build.directory}/img" overwrite="true">
                                     <fileset dir="${project.basedir}/src/main/resources/img"/>
                                 </copy>
+                                <copy todir="${project.build.directory}" overwrite="true">
+                                    <fileset dir="${project.basedir}/src/main/resources"
+                                             includes="instalar-inicializacao-origem.bat,instalar-inicializacao-origem.ps1,remover-inicializacao-origem.bat,remover-inicializacao-origem.ps1,liberar-porta-origem.bat,liberar-porta-origem.ps1,remover-porta-origem.bat"/>
+                                </copy>
                             </target>
                         </configuration>
                     </execution>

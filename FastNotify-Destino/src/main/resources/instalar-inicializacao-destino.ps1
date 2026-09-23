@@ -6,25 +6,51 @@ $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 $startupDir = [Environment]::GetFolderPath('Startup')
 $Nome = 'FastNotify-Destino'
 $Arquivo = 'FastNotify-Destino.exe'
-$Pastas = @('FastNotify-Destino\target')
 
 function Find-AppExe {
-    foreach ($rel in $Pastas) {
-        $p = Join-Path $scriptDir (Join-Path $rel $Arquivo)
-        if (Test-Path -LiteralPath $p) { return (Resolve-Path -LiteralPath $p).Path }
+    $local = Join-Path $scriptDir $Arquivo
+    if (Test-Path -LiteralPath $local) {
+        return (Resolve-Path -LiteralPath $local).Path
     }
-    $hit = Get-ChildItem -LiteralPath $scriptDir -Recurse -Filter $Arquivo -File -ErrorAction SilentlyContinue |
-        Select-Object -First 1
-    if ($hit) { return $hit.FullName }
+
+    $dir = $scriptDir
+    for ($i = 0; $i -lt 8 -and -not [string]::IsNullOrEmpty($dir); $i++) {
+        foreach ($rel in @($Arquivo, (Join-Path 'target' $Arquivo))) {
+            $p = Join-Path $dir $rel
+            if (Test-Path -LiteralPath $p) {
+                return (Resolve-Path -LiteralPath $p).Path
+            }
+        }
+        $parent = Split-Path -Parent $dir
+        if ([string]::IsNullOrEmpty($parent) -or $parent -eq $dir) {
+            break
+        }
+        $dir = $parent
+    }
+
+    $bases = @($scriptDir)
+    $parentDir = Split-Path -Parent $scriptDir
+    if (-not [string]::IsNullOrEmpty($parentDir)) {
+        $bases += $parentDir
+    }
+    foreach ($base in $bases) {
+        $hit = Get-ChildItem -LiteralPath $base -Recurse -Filter $Arquivo -File -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+        if ($hit) {
+            return $hit.FullName
+        }
+    }
     return $null
 }
 
 function Remove-OldEntries {
+    $had = $false
     if (Test-Path -LiteralPath $runKey) {
         $prop = Get-ItemProperty -LiteralPath $runKey -ErrorAction SilentlyContinue
         if ($prop -and $prop.PSObject.Properties.Name -contains $Nome) {
             Remove-ItemProperty -LiteralPath $runKey -Name $Nome -Force
-            Write-Host ("  Removida entrada antiga do registro (HKCU Run\{0})." -f $Nome)
+            Write-Host ("  Consulta: entrada JA EXISTE em HKCU Run\{0} -> sera atualizada." -f $Nome)
+            $had = $true
         }
     }
 
@@ -33,12 +59,17 @@ function Remove-OldEntries {
         ForEach-Object {
             Remove-Item -LiteralPath $_.FullName -Force
             Write-Host ("  Removido atalho antigo: {0}" -f $_.FullName)
+            $had = $true
         }
 
     $ps1 = Join-Path $startupDir ("{0}.ps1" -f $Nome)
     if (Test-Path -LiteralPath $ps1) {
         Remove-Item -LiteralPath $ps1 -Force
         Write-Host ("  Removido script antigo: {0}" -f $ps1)
+        $had = $true
+    }
+    if (-not $had) {
+        Write-Host ("  Consulta: entrada NAO EXISTE em HKCU Run\{0} -> sera criada." -f $Nome)
     }
 }
 
@@ -60,7 +91,7 @@ Write-Host ''
 
 $exe = Find-AppExe
 if (-not $exe) {
-    Write-Host ("Nao encontrado ({0}) - rode mvn clean package em FastNotify-Destino antes." -f $Arquivo) -ForegroundColor Yellow
+    Write-Host ("Nao encontrado ({0}) - rode mvn package em FastNotify-Destino (o exe fica em target\)." -f $Arquivo) -ForegroundColor Yellow
     exit 1
 }
 

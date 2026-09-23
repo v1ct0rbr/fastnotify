@@ -48,11 +48,11 @@ public final class FirewallChecker {
             if (text.startsWith("FECHADA")) {
                 return "Firewall entrada " + port + ": regra existe mas esta "
                         + text.substring("FECHADA".length()).trim()
-                        + " — rode liberar-portas-firewall.bat.";
+                        + " — rode liberar-porta-origem.bat.";
             }
             if (text.startsWith("AUSENTE")) {
                 return "Firewall entrada " + port + ": sem regra FastNotify — "
-                        + "rode liberar-portas-firewall.bat (admin).";
+                        + "rode liberar-porta-origem.bat (admin).";
             }
             return "Firewall entrada " + port + ": " + (text.isEmpty() ? "sem dados" : text) + ".";
         } catch (Exception e) {

@@ -103,10 +103,97 @@ public class ConfigDialog extends Dialog<Boolean> {
         grid.add(retentionSpinner, 1, 6);
         grid.add(retentionInfo, 1, 7);
 
+        Label firewallStatus = new Label();
+        firewallStatus.setWrapText(true);
+        firewallStatus.setStyle("-fx-text-fill: #64748B; -fx-font-size: 11px;");
+        Button firewallBtn = new Button("Verificar firewall");
+        firewallBtn.setTooltip(new javafx.scene.control.Tooltip(
+                "Consulta se a regra de entrada da porta de cadastro existe/está ativa"));
+        firewallBtn.setOnAction(e -> {
+            int p = registerPortSpinner.getValue();
+            firewallStatus.setText("Consultando porta " + p + " ...");
+            Thread t = new Thread(() -> {
+                String status = FirewallChecker.checkInboundRule(
+                        "FastNotify-Origem-Cadastro", p);
+                javafx.application.Platform.runLater(() -> firewallStatus.setText(status));
+            }, "fastnotify-firewall-check");
+            t.setDaemon(true);
+            t.start();
+        });
+        Button liberarBtn = new Button("Liberar porta");
+        liberarBtn.setTooltip(new javafx.scene.control.Tooltip(
+                "Executa liberar-porta-origem.bat (admin) — lê registerPort de origem.properties"));
+        liberarBtn.setOnAction(e -> {
+            try {
+                saveConfig();
+            } catch (RuntimeException ex) {
+                firewallStatus.setText(ex.getMessage());
+                return;
+            }
+            firewallStatus.setText("Abrindo elevação do Windows para liberar a porta...");
+            Thread t = new Thread(() -> {
+                try {
+                    FirewallScripts.liberarPorta(config.getFile().getParent());
+                    javafx.application.Platform.runLater(() -> firewallStatus.setText(
+                            "Elevação aberta — porta lida de "
+                                    + config.getFile().getFileName() + "."));
+                } catch (RuntimeException ex) {
+                    javafx.application.Platform.runLater(() ->
+                            firewallStatus.setText(ex.getMessage()));
+                }
+            }, "fastnotify-firewall-libera");
+            t.setDaemon(true);
+            t.start();
+        });
+        Button removerRegraBtn = new Button("Remover regra");
+        removerRegraBtn.setTooltip(new javafx.scene.control.Tooltip(
+                "Executa remover-porta-origem.bat (admin) — remove a regra se existir"));
+        removerRegraBtn.setOnAction(e -> {
+            firewallStatus.setText("Abrindo elevação do Windows para remover a regra...");
+            Thread t = new Thread(() -> {
+                try {
+                    FirewallScripts.removerPorta(config.getFile().getParent());
+                    javafx.application.Platform.runLater(() -> firewallStatus.setText(
+                            "Elevação aberta — remoção da regra FastNotify-Origem-Cadastro."));
+                } catch (RuntimeException ex) {
+                    javafx.application.Platform.runLater(() ->
+                            firewallStatus.setText(ex.getMessage()));
+                }
+            }, "fastnotify-firewall-remove");
+            t.setDaemon(true);
+            t.start();
+        });
+        javafx.scene.layout.HBox fwRow = new javafx.scene.layout.HBox(8,
+                firewallBtn, liberarBtn, removerRegraBtn, firewallStatus);
+        fwRow.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+        grid.add(fwRow, 0, 8);
+        grid.setColumnSpan(fwRow, 2);
+
+        Label startupStatus = new Label();
+        startupStatus.setWrapText(true);
+        startupStatus.setStyle("-fx-text-fill: #64748B; -fx-font-size: 11px;");
+        Button installStartupBtn = new Button("Inicializar com Windows");
+        installStartupBtn.setTooltip(new javafx.scene.control.Tooltip(
+                "Executa instalar-inicializacao-origem.ps1 (HKCU Run, sem admin)"));
+        installStartupBtn.setOnAction(e -> runStartup(
+                FirewallScripts::instalarInicializacao, startupStatus,
+                "Executando instalar-inicializacao-origem..."));
+        Button removeStartupBtn = new Button("Remover inicialização");
+        removeStartupBtn.setTooltip(new javafx.scene.control.Tooltip(
+                "Executa remover-inicializacao-origem.ps1 (HKCU Run, sem admin)"));
+        removeStartupBtn.setOnAction(e -> runStartup(
+                FirewallScripts::removerInicializacao, startupStatus,
+                "Executando remover-inicializacao-origem..."));
+        javafx.scene.layout.HBox startRow = new javafx.scene.layout.HBox(8,
+                installStartupBtn, removeStartupBtn, startupStatus);
+        startRow.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+        grid.add(startRow, 0, 9);
+        grid.setColumnSpan(startRow, 2);
+
         VBox box = new VBox(10, grid, destInfo);
         box.setPadding(new Insets(8));
         getDialogPane().setContent(box);
-        getDialogPane().setPrefWidth(540);
+        getDialogPane().setPrefWidth(560);
 
         ButtonType cancel = new ButtonType("Cancelar", ButtonBar.ButtonData.CANCEL_CLOSE);
         ButtonType save = new ButtonType("Salvar", ButtonBar.ButtonData.OK_DONE);
@@ -118,6 +205,21 @@ public class ConfigDialog extends Dialog<Boolean> {
             confirmed = true;
         });
         setResultConverter(b -> confirmed);
+    }
+
+    private void runStartup(Runnable action, Label status, String runningText) {
+        status.setText(runningText);
+        Thread t = new Thread(() -> {
+            try {
+                action.run();
+                javafx.application.Platform.runLater(() ->
+                        status.setText("Script de inicialização iniciado."));
+            } catch (RuntimeException ex) {
+                javafx.application.Platform.runLater(() -> status.setText(ex.getMessage()));
+            }
+        }, "fastnotify-startup-script");
+        t.setDaemon(true);
+        t.start();
     }
 
     private void saveConfig() {

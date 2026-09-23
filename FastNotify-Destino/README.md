@@ -30,7 +30,9 @@ Aplicativo **Maven + JavaFX** de exibição de notificações recebidas do **Fas
 - **Retenção de logs**: `logRetentionDays` (padrão `30`, `0` = manter todos) em `destino.properties` ou Configurações → exclui arquivos com data anterior a **hoje − N dias** (startup + a cada 10 min + ao salvar config)
 - **Janela de logs** no menu do tray (**Ver logs...**): escolher o dia, filtrar por tipo e **Salvar cache no log** (grava pendências no arquivo do dia atual e limpa o cache)
 - **Tray icon** (SVG `img/mensagem-recebida.svg`) com menu: Abrir / **Configurações...** / **Ver logs...** / Sair
-- Botão **Firewall** (Configuração): consulta se a regra de entrada da porta de notificação existe/está ativa no Windows
+- Janela principal: status, **Configurações** e **Cadastrar nesta Origem** (GridPane) — porta/token/som/retenção **só** em Configurações
+- Em **Configurações**: **Verificar firewall**, **Liberar porta** (cria/atualiza), **Remover regra**; **Inicializar com Windows** / **Remover inicialização** (porta do firewall só de `config/destino.properties`)
+- Ícone da janela a partir do mesmo SVG (`TrayIcons.applyWindowIcons`)
 - Fechar a janela minimiza para o tray (a escuta continua)
 - **Inicia no tray** (sem janela principal); duplo clique / **Abrir janela** no menu do tray abre a UI
 - **Instância única**: se já houver um Destino aberto, o novo atalho/exe mostra aviso e encerra (trava `config/destino.lock`)
@@ -45,7 +47,7 @@ O **OpenJDK 25 não inclui JavaFX**. Ele vem via dependência Maven `org.openjfx
 mvn clean package
 ```
 
-Gera `target/fastnotify-destino.jar`, `target/FastNotify-Destino.exe` (Launch4j, ícone `img/mensagem-recebida.ico`), `target/lib/` e copia `target/config/destino.properties` (sem sobrescrever edits locais).
+Gera `target/fastnotify-destino.jar`, `target/FastNotify-Destino.exe` (Launch4j, ícone `img/mensagem-recebida.ico`), `target/lib/`, `target/sounds/`, `target/config/destino.properties` (sem sobrescrever edits locais), `target/instalar-inicializacao-destino.{bat,ps1}` e `target/liberar-porta-destino.{bat,ps1}` + `target/remover-porta-destino.bat` (firewall; porta só do `.properties`).
 
 O `.jar` sozinho não tem ícone no Windows — use o `.exe` gerado (fique na mesma pasta do jar + `lib/`).
 
@@ -86,13 +88,15 @@ Pasta de logs (padrão ao lado de `config/`): `-Dfastnotify.logs=Caminho\logs`.
 
 ## Firewall
 
-Na raiz do projeto (admin):
+Scripts em `src/main/resources/` → **`target/`** no `mvn package`. A **porta vem só de** `config/destino.properties` (`port`) — não há porta embutida no script.
 
 ```bat
-liberar-portas-firewall.bat
+cd target
+liberar-porta-destino.bat
+remover-porta-destino.bat
 ```
 
-Lê `port` em `config/destino.properties` e cria a regra de **entrada TCP** `FastNotify-Destino-Notificacao`. Status: botão **Firewall** no app ou `liberar-portas-firewall.ps1 -Acao Status`.
+Regra de **entrada TCP** `FastNotify-Destino-Notificacao`. O script **consulta antes**: liberar cria ou **atualiza**; remover apaga se existir. No app: **Configurações → Liberar porta / Remover regra / Verificar firewall** e **Inicializar com Windows / Remover inicialização**. Status CLI: `liberar-porta-destino.ps1 -Acao Status`.
 
 ## Protocolo
 

@@ -11,6 +11,7 @@ import javafx.scene.control.TitledPane;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 
 import java.time.LocalTime;
@@ -34,6 +35,8 @@ public class SenderView extends BorderPane {
     private final List<ConfigStore.FixedMessage> fixedMessages;
     private final List<DestinosStore.Destino> destinos;
     private final Label registerStatus = new Label("Cadastro: —");
+    private Runnable openSettingsAction = () -> {
+    };
 
     public SenderView(MessageStore messageStore, DestinosStore destinosStore,
                       ConfigStore config, LogService logService) {
@@ -80,26 +83,28 @@ public class SenderView extends BorderPane {
         setBottom(buildLogPane());
     }
 
-    private HBox buildToolbar() {
-        Label info = new Label(
-                "Configuração por destino (host, porta, token, tela, tempo) na lista abaixo.");
-        info.setStyle("-fx-text-fill: #64748B; -fx-font-size: 12px;");
-        info.setWrapText(true);
-        HBox.setHgrow(info, Priority.ALWAYS);
+    public void setOpenSettingsAction(Runnable openSettingsAction) {
+        this.openSettingsAction = openSettingsAction == null ? () -> {
+        } : openSettingsAction;
+    }
 
+    private HBox buildToolbar() {
         registerStatus.setStyle(
                 "-fx-text-fill: #2563EB; -fx-font-size: 12px; -fx-font-weight: bold;");
 
-        Button firewall = new Button("Firewall");
-        firewall.setTooltip(new javafx.scene.control.Tooltip(
-                "Consulta se a porta de cadastro tem regra de entrada no Windows"));
-        firewall.setOnAction(e -> checkFirewall());
+        Button settings = new Button("Configurações");
+        settings.setTooltip(new javafx.scene.control.Tooltip(
+                "Porta/token de cadastro, PSK, retenção de logs e firewall"));
+        settings.setOnAction(e -> openSettingsAction.run());
 
         Button bell = new Button("🔔 Campainha");
         bell.setStyle("-fx-font-weight: bold; -fx-background-color: #F59E0B; -fx-text-fill: white;");
         bell.setOnAction(e -> sendCampainha());
 
-        HBox bar = new HBox(8, info, registerStatus, firewall, bell);
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        HBox bar = new HBox(8, registerStatus, spacer, settings, bell);
         bar.setAlignment(Pos.CENTER_LEFT);
         bar.setPadding(new Insets(8));
         return bar;
@@ -130,15 +135,6 @@ public class SenderView extends BorderPane {
         open.setOnAction(e -> openCompose(null));
         right.getChildren().add(open);
 
-        Label hint = new Label("Envio rápido por tipo:");
-        right.getChildren().add(hint);
-        for (MsgType type : MsgType.values()) {
-            Button b = new Button(type.label());
-            b.setMaxWidth(Double.MAX_VALUE);
-            b.setOnAction(e -> openCompose(type));
-            right.getChildren().add(b);
-        }
-
         Label multiHint = new Label(
                 "Sem seleção → envia/testa todos os destinos. "
                         + "Com seleção → só os selecionados. "
@@ -148,7 +144,7 @@ public class SenderView extends BorderPane {
         right.getChildren().add(multiHint);
 
         SplitPane split = new SplitPane(left, right);
-        split.setDividerPositions(0.55);
+        split.setDividerPositions(0.72);
         return split;
     }
 
@@ -423,20 +419,6 @@ public class SenderView extends BorderPane {
 
     public void setRegisterStatus(String text) {
         registerStatus.setText(text);
-    }
-
-    public void checkFirewall() {
-        int port = config.getRegisterPort();
-        log("Consultando firewall (entrada porta " + port + ", regra "
-                + "FastNotify-Origem-Cadastro) ...");
-        Thread t = new Thread(() -> {
-            String status = FirewallChecker.checkInboundRule(
-                    "FastNotify-Origem-Cadastro", port);
-            javafx.application.Platform.runLater(() ->
-                    logAs(LogType.FIREWALL, "-", status));
-        }, "fastnotify-firewall-check");
-        t.setDaemon(true);
-        t.start();
     }
 
     public void upsertDestino(DestinosStore.Destino nuevo) {
