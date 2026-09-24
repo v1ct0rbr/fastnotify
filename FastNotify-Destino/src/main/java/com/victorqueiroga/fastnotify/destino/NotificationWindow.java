@@ -45,7 +45,7 @@ public class NotificationWindow {
     public NotificationWindow(NotificationMessage msg, boolean playSound) {
         this.playSound = playSound;
         MsgType type = msg.getType();
-        stage = new Stage(StageStyle.UNDECORATED);
+        stage = new Stage(StageStyle.TRANSPARENT);
         stage.setAlwaysOnTop(true);
 
         long duration = Math.max(MIN_DURATION_MS, Math.min(msg.getDurationMs(), MAX_DURATION_MS));
